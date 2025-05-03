@@ -1,1 +1,1 @@
-Reads `tf_extra` and publishes ros markers.
+Visualize transforms and meshes from Redis in Rviz via ROS2.
