@@ -10,6 +10,7 @@ inherits = "release"
 
 [dependencies]
 r2r = "0.9.5"
+log = "0.4.22"
 futures = "0.3.31"
 micro_sp = {git = "https://github.com/endre90/micro_sp", branch = "master"}
 tokio = { version = "1.44.2", features = ["full"] }

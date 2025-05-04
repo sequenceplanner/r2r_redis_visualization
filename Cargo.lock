@@ -1190,7 +1190,7 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 [[package]]
 name = "micro_sp"
 version = "0.1.0"
-source = "git+https://github.com/endre90/micro_sp?branch=master#8dbf024f854ad073d2ca4f363213e1bb10dd19be"
+source = "git+https://github.com/endre90/micro_sp?branch=master#dd366e9b045c9807bd16257b9122baac46884168"
 dependencies = [
  "chrono",
  "env_logger",
@@ -1678,6 +1678,7 @@ name = "r2r_redis_visualization"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "log",
  "micro_sp",
  "r2r",
  "serde",

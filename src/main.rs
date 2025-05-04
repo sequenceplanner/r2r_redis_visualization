@@ -150,6 +150,8 @@ pub fn decode_metadata(map_value: &MapOrUnknown) -> PotentialTransformMetadata {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    initialize_env_logger();
+
     // setup the node
     let ctx = r2r::Context::create()?;
     let mut node = r2r::Node::create(ctx, NODE_ID, "")?;
@@ -161,7 +163,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tokio::task::spawn(async move {
         match redis_state_manager(rx, State::new()).await {
             Ok(()) => (),
-            Err(e) => r2r::log_error!(NODE_ID, "Node started."),
+            Err(e) => log::error!(target: &&format!("r2r_redis_visualization"), "{}", e),
         };
     });
 
@@ -198,8 +200,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .await;
         match result {
-            Ok(()) => r2r::log_info!(NODE_ID, "Visualization Server succeeded."),
-            Err(e) => r2r::log_error!(NODE_ID, "Visualization Server failed with: {}.", e),
+            Ok(()) => {
+                log::info!(target: &&format!("r2r_redis_visualization"), "Visualization Server suceeded.")
+            }
+            Err(e) => {
+                log::error!(target: &&format!("r2r_redis_visualization"), "Visualization Server failed with: {}.", e)
+            }
         };
     });
 
@@ -208,7 +214,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         node.spin_once(std::time::Duration::from_millis(1000));
     });
 
-    r2r::log_warn!(NODE_ID, "Node started.");
+    log::warn!(target: &&format!("r2r_redis_visualization"), "Node started.");
 
     handle.join().unwrap();
 
@@ -407,8 +413,7 @@ pub async fn visualization_server(
         match active_frame_broadcaster.publish(&active_msg) {
             Ok(()) => (),
             Err(e) => {
-                r2r::log_error!(
-                    NODE_ID,
+                log::error!(target: &&format!("r2r_redis_visualization"), 
                     "Active broadcaster failed to send a message with: '{}'",
                     e
                 );
@@ -418,8 +423,7 @@ pub async fn visualization_server(
         match static_frame_broadcaster.publish(&static_msg) {
             Ok(()) => (),
             Err(e) => {
-                r2r::log_error!(
-                    NODE_ID,
+                log::error!(target: &&format!("r2r_redis_visualization"), 
                     "Static broadcaster failed to send a message with: '{}'",
                     e
                 );
@@ -429,8 +433,7 @@ pub async fn visualization_server(
         match zone_publisher.publish(&zone_array_msg) {
             Ok(()) => (),
             Err(e) => {
-                r2r::log_error!(
-                    NODE_ID,
+                log::error!(target: &&format!("r2r_redis_visualization"), 
                     "Publisher failed to send zone marker message with: {}",
                     e
                 );
@@ -440,8 +443,7 @@ pub async fn visualization_server(
         match mesh_publisher.publish(&mesh_array_msg) {
             Ok(()) => (),
             Err(e) => {
-                r2r::log_error!(
-                    NODE_ID,
+                log::error!(target: &&format!("r2r_redis_visualization"), 
                     "Publisher failed to send mesh marker message with: {}",
                     e
                 );
