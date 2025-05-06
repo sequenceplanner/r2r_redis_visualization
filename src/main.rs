@@ -158,7 +158,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let (tx, rx) = mpsc::channel(32);
 
-    let path = "/home/endre/rust_crates/micro_sp/src/transforms/examples/data/";
+    let meshes_dir = std::env::var("MESHES_DIR").expect("MESHES_DIR is not set");
+    let scenario_dir = std::env::var("SCENARIO_DIR").expect("SCENARIO_DIR is not set");
+
+    // let path = "/home/endre/rust_crates/micro_sp/src/transforms/examples/data/";
 
     tokio::task::spawn(async move {
         match redis_state_manager(rx, State::new()).await {
@@ -167,7 +170,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         };
     });
 
-    tx.send(StateManagement::LoadTransformScenario(path.to_string()))
+    tx.send(StateManagement::LoadTransformScenario(scenario_dir.to_string()))
         .await
         .expect("failed");
 
@@ -197,6 +200,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             static_frame_broadcaster,
             tx_clone,
             marker_publisher_timer,
+            meshes_dir
         )
         .await;
         match result {
@@ -228,6 +232,7 @@ pub async fn visualization_server(
     static_frame_broadcaster: r2r::Publisher<TFMessage>,
     command_sender: mpsc::Sender<StateManagement>,
     mut timer: r2r::Timer,
+    meshes_dir: String
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let mut mesh_markers: Vec<Marker> = vec![];
@@ -342,7 +347,7 @@ pub async fn visualization_server(
                                 b: metadata.mesh_b,
                                 a: metadata.mesh_a,
                             },
-                            mesh_resource: format!("file://{}", path.to_string()),
+                            mesh_resource: format!("file://{}/{}", meshes_dir,path.to_string()),
                             ..Marker::default()
                         };
                         mesh_markers.push(indiv_marker);
