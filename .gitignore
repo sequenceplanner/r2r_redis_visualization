@@ -22,3 +22,4 @@ big_files/
 
 # vscode
 *.vscode
+Cargo.lock
