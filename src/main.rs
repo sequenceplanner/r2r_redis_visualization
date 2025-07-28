@@ -4,7 +4,7 @@ use r2r::tf2_msgs::msg::TFMessage;
 use r2r::visualization_msgs::msg::{Marker, MarkerArray};
 use r2r::QosProfile;
 use std::error::Error;
-use tokio::sync::{mpsc, oneshot};
+use std::sync::Arc;
 
 use r2r::geometry_msgs::msg::{Transform, TransformStamped, Vector3};
 
@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use micro_sp::*;
 
 pub static NODE_ID: &'static str = "redis_visualization";
-pub static BUFFER_MAINTAIN_RATE: u64 = 100;
+pub static BUFFER_MAINTAIN_RATE: u64 = 20;
 pub static MARKER_PUBLISH_RATE: u64 = 20;
 pub static FRAME_LIFETIME: i32 = 3; //seconds
 
@@ -34,7 +34,7 @@ pub struct PotentialTransformMetadata {
     pub mesh_r: f32,
     pub mesh_g: f32,
     pub mesh_b: f32,
-    pub mesh_a: f32,
+    pub mesh_a: f32, // pub secondary_transforms: Vec<SPTransformStamped>
 }
 
 impl Default for PotentialTransformMetadata {
@@ -51,7 +51,7 @@ impl Default for PotentialTransformMetadata {
             mesh_r: 1.0,
             mesh_g: 1.0,
             mesh_b: 1.0,
-            mesh_a: 1.0,
+            mesh_a: 1.0, // secondary_transforms: vec!()
         }
     }
 }
@@ -141,6 +141,19 @@ pub fn decode_metadata(map_value: &MapOrUnknown) -> PotentialTransformMetadata {
                     metadata.mesh_a = of.into_inner() as f32;
                 }
             }
+            // "secondary_transforms" => {
+            //     if let SPValue::Array(ArrayOrUnknown::Array(frames)) = sp_value {
+            //         let mut secondary_transforms = vec!();
+            //         frames.iter().for_each(|sp_value| match sp_value {
+            //             SPValue::Transform(tf_or_unknown) => match tf_or_unknown {
+            //                 TransformOrUnknown::Transform(tf) => secondary_transforms.push(tf.clone()),
+            //                 TransformOrUnknown::UNKNOWN => ()
+            //             },
+            //             _ => ()
+            //         });
+            //         metadata.secondary_transforms = secondary_transforms;
+            //     }
+            // }
             _ => {} // Ignore unknown keys
         }
     }
@@ -156,23 +169,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let ctx = r2r::Context::create()?;
     let mut node = r2r::Node::create(ctx, NODE_ID, "")?;
 
-    let (tx, rx) = mpsc::channel(32);
+    // let (tx, rx) = mpsc::channel(32);
 
     let meshes_dir = std::env::var("MESHES_DIR").expect("MESHES_DIR is not set");
     let scenario_dir = std::env::var("SCENARIO_DIR").expect("SCENARIO_DIR is not set");
 
-    // let path = "/home/endre/rust_crates/micro_sp/src/transforms/examples/data/";
-
-    tokio::task::spawn(async move {
-        match redis_state_manager(rx, State::new()).await {
-            Ok(()) => (),
-            Err(e) => log::error!(target: &&format!("r2r_redis_visualization"), "{}", e),
-        };
-    });
-
-    tx.send(StateManagement::LoadTransformScenario(scenario_dir.to_string()))
-        .await
-        .expect("failed");
+    let connection_manager = ConnectionManager::new().await;
+    let mut con = connection_manager.get_connection().await;
+    StateManager::load_transform_scenario(&mut con, &scenario_dir.to_string()).await;
 
     let marker_publisher_timer =
         node.create_wall_timer(std::time::Duration::from_millis(MARKER_PUBLISH_RATE))?;
@@ -191,16 +195,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let active_frame_broadcaster = node
         .create_publisher::<TFMessage>("tf", QosProfile::transient_local(QosProfile::default()))?;
 
-    let tx_clone = tx.clone();
+    let con_arc = Arc::new(connection_manager);
     tokio::task::spawn(async move {
         let result = visualization_server(
             mesh_marker_publisher,
             zone_marker_publisher,
             active_frame_broadcaster,
             static_frame_broadcaster,
-            tx_clone,
+            con_arc,
             marker_publisher_timer,
-            meshes_dir
+            meshes_dir,
         )
         .await;
         match result {
@@ -230,22 +234,24 @@ pub async fn visualization_server(
     zone_publisher: r2r::Publisher<MarkerArray>,
     active_frame_broadcaster: r2r::Publisher<TFMessage>,
     static_frame_broadcaster: r2r::Publisher<TFMessage>,
-    command_sender: mpsc::Sender<StateManagement>,
+    connection_manager: Arc<ConnectionManager>,
     mut timer: r2r::Timer,
-    meshes_dir: String
+    meshes_dir: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut con = connection_manager.get_connection().await;
     loop {
+        timer.tick().await?;
+        if !connection_manager
+            .test_connection(&"r2r_redis_visualization")
+            .await
+        {
+            continue;
+        }
         let mut mesh_markers: Vec<Marker> = vec![];
         let mut zone_markers: Vec<Marker> = vec![];
         let mut active_transforms = vec![];
         let mut static_transforms = vec![];
-        let (response_tx, response_rx) = oneshot::channel();
-        command_sender
-            .send(StateManagement::GetAllTransforms(response_tx))
-            .await
-            .expect("failed");
-
-        let frames_local = response_rx.await.expect("failed");
+        let frames_local = StateManager::get_all_transforms(&mut con).await;
         let mut id: i32 = 0;
         for (_, frame) in frames_local {
             let mut clock = r2r::Clock::create(r2r::ClockType::RosTime).unwrap();
@@ -297,6 +303,29 @@ pub async fn visualization_server(
             }
 
             let metadata = decode_metadata(&frame.metadata);
+            // for frame in metadata.secondary_transforms {
+            //     static_transforms.push(TransformStamped {
+            //         header: Header {
+            //             stamp: time_stamp.clone(),
+            //             frame_id: frame.child_frame_id.clone(),
+            //         },
+            //         child_frame_id: format!(frame.child_frame_id.clone(),
+            //         transform: Transform {
+            //             translation: Vector3 {
+            //                 x: *frame.transform.translation.x,
+            //                 y: *frame.transform.translation.y,
+            //                 z: *frame.transform.translation.z,
+            //             },
+            //             rotation: Quaternion {
+            //                 x: *frame.transform.rotation.x,
+            //                 y: *frame.transform.rotation.y,
+            //                 z: *frame.transform.rotation.z,
+            //                 w: *frame.transform.rotation.w,
+            //             },
+            //         },
+            //     });
+            // }
+
             if metadata.visualize_mesh {
                 match metadata.mesh_file {
                     Some(path) => {
@@ -347,7 +376,7 @@ pub async fn visualization_server(
                                 b: metadata.mesh_b,
                                 a: metadata.mesh_a,
                             },
-                            mesh_resource: format!("file://{}/{}", meshes_dir,path.to_string()),
+                            mesh_resource: format!("file://{}/{}", meshes_dir, path.to_string()),
                             ..Marker::default()
                         };
                         mesh_markers.push(indiv_marker);
@@ -418,7 +447,7 @@ pub async fn visualization_server(
         match active_frame_broadcaster.publish(&active_msg) {
             Ok(()) => (),
             Err(e) => {
-                log::error!(target: &&format!("r2r_redis_visualization"), 
+                log::error!(target: &&format!("r2r_redis_visualization"),
                     "Active broadcaster failed to send a message with: '{}'",
                     e
                 );
@@ -428,7 +457,7 @@ pub async fn visualization_server(
         match static_frame_broadcaster.publish(&static_msg) {
             Ok(()) => (),
             Err(e) => {
-                log::error!(target: &&format!("r2r_redis_visualization"), 
+                log::error!(target: &&format!("r2r_redis_visualization"),
                     "Static broadcaster failed to send a message with: '{}'",
                     e
                 );
@@ -438,7 +467,7 @@ pub async fn visualization_server(
         match zone_publisher.publish(&zone_array_msg) {
             Ok(()) => (),
             Err(e) => {
-                log::error!(target: &&format!("r2r_redis_visualization"), 
+                log::error!(target: &&format!("r2r_redis_visualization"),
                     "Publisher failed to send zone marker message with: {}",
                     e
                 );
@@ -448,7 +477,7 @@ pub async fn visualization_server(
         match mesh_publisher.publish(&mesh_array_msg) {
             Ok(()) => (),
             Err(e) => {
-                log::error!(target: &&format!("r2r_redis_visualization"), 
+                log::error!(target: &&format!("r2r_redis_visualization"),
                     "Publisher failed to send mesh marker message with: {}",
                     e
                 );
