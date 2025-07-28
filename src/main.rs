@@ -483,7 +483,5 @@ pub async fn visualization_server(
                 );
             }
         };
-
-        timer.tick().await?;
     }
 }
