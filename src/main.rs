@@ -34,7 +34,7 @@ pub struct PotentialTransformMetadata {
     pub mesh_r: f32,
     pub mesh_g: f32,
     pub mesh_b: f32,
-    pub mesh_a: f32, // pub secondary_transforms: Vec<SPTransformStamped>
+    pub mesh_a: f32,
 }
 
 impl Default for PotentialTransformMetadata {
@@ -51,7 +51,7 @@ impl Default for PotentialTransformMetadata {
             mesh_r: 1.0,
             mesh_g: 1.0,
             mesh_b: 1.0,
-            mesh_a: 1.0, // secondary_transforms: vec!()
+            mesh_a: 1.0,
         }
     }
 }
@@ -141,6 +141,7 @@ pub fn decode_metadata(map_value: &MapOrUnknown) -> PotentialTransformMetadata {
                     metadata.mesh_a = of.into_inner() as f32;
                 }
             }
+            // UNNECESSARY, BECAUSE THESE SHOUL BE POPULATING THE DB FROM ELSEWHERE
             // "secondary_transforms" => {
             //     if let SPValue::Array(ArrayOrUnknown::Array(frames)) = sp_value {
             //         let mut secondary_transforms = vec!();
@@ -176,7 +177,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let connection_manager = ConnectionManager::new().await;
     let mut con = connection_manager.get_connection().await;
-    StateManager::load_transform_scenario(&mut con, &scenario_dir.to_string()).await;
+    TransformsManager::load_transform_scenario(&mut con, &scenario_dir.to_string()).await;
 
     let marker_publisher_timer =
         node.create_wall_timer(std::time::Duration::from_millis(MARKER_PUBLISH_RATE))?;
@@ -241,8 +242,8 @@ pub async fn visualization_server(
     let mut con = connection_manager.get_connection().await;
     loop {
         timer.tick().await?;
-        if !connection_manager
-            .test_connection(&"r2r_redis_visualization")
+        if let Err(_) = connection_manager
+            .check_redis_health("redis_visualization")
             .await
         {
             continue;
@@ -251,7 +252,7 @@ pub async fn visualization_server(
         let mut zone_markers: Vec<Marker> = vec![];
         let mut active_transforms = vec![];
         let mut static_transforms = vec![];
-        let frames_local = StateManager::get_all_transforms(&mut con).await;
+        let frames_local = TransformsManager::get_all_transforms(&mut con).await;
         let mut id: i32 = 0;
         for (_, frame) in frames_local {
             let mut clock = r2r::Clock::create(r2r::ClockType::RosTime).unwrap();
@@ -303,29 +304,6 @@ pub async fn visualization_server(
             }
 
             let metadata = decode_metadata(&frame.metadata);
-            // for frame in metadata.secondary_transforms {
-            //     static_transforms.push(TransformStamped {
-            //         header: Header {
-            //             stamp: time_stamp.clone(),
-            //             frame_id: frame.child_frame_id.clone(),
-            //         },
-            //         child_frame_id: format!(frame.child_frame_id.clone(),
-            //         transform: Transform {
-            //             translation: Vector3 {
-            //                 x: *frame.transform.translation.x,
-            //                 y: *frame.transform.translation.y,
-            //                 z: *frame.transform.translation.z,
-            //             },
-            //             rotation: Quaternion {
-            //                 x: *frame.transform.rotation.x,
-            //                 y: *frame.transform.rotation.y,
-            //                 z: *frame.transform.rotation.z,
-            //                 w: *frame.transform.rotation.w,
-            //             },
-            //         },
-            //     });
-            // }
-
             if metadata.visualize_mesh {
                 match metadata.mesh_file {
                     Some(path) => {
