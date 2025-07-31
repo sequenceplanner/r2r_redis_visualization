@@ -170,14 +170,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let ctx = r2r::Context::create()?;
     let mut node = r2r::Node::create(ctx, NODE_ID, "")?;
 
-    // let (tx, rx) = mpsc::channel(32);
-
     let meshes_dir = std::env::var("MESHES_DIR").expect("MESHES_DIR is not set");
     let scenario_dir = std::env::var("SCENARIO_DIR").expect("SCENARIO_DIR is not set");
 
     let connection_manager = ConnectionManager::new().await;
     let mut con = connection_manager.get_connection().await;
-    TransformsManager::load_transform_scenario(&mut con, &scenario_dir.to_string()).await;
+    let _ = TransformsManager::load_transforms_from_path(&mut con, &scenario_dir.to_string()).await?;
 
     let marker_publisher_timer =
         node.create_wall_timer(std::time::Duration::from_millis(MARKER_PUBLISH_RATE))?;
@@ -252,7 +250,7 @@ pub async fn visualization_server(
         let mut zone_markers: Vec<Marker> = vec![];
         let mut active_transforms = vec![];
         let mut static_transforms = vec![];
-        let frames_local = TransformsManager::get_all_transforms(&mut con).await;
+        let frames_local = TransformsManager::get_all_transforms(&mut con).await?;
         let mut id: i32 = 0;
         for (_, frame) in frames_local {
             let mut clock = r2r::Clock::create(r2r::ClockType::RosTime).unwrap();
