@@ -94,9 +94,10 @@ pub async fn visualization_server(
     mut timer: r2r::Timer,
     meshes_dir: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut con = connection_manager.get_connection().await;
+    
     loop {
         timer.tick().await?;
+        let mut con = connection_manager.get_connection().await;
         if let Err(_) = connection_manager
             .check_redis_health("redis_visualization")
             .await
