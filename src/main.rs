@@ -16,7 +16,7 @@ use micro_sp::*;
 
 pub static NODE_ID: &'static str = "redis_visualization";
 pub static BUFFER_MAINTAIN_RATE: u64 = 20;
-pub static MARKER_PUBLISH_RATE: u64 = 20;
+pub static MARKER_PUBLISH_RATE: u64 = 50;
 pub static FRAME_LIFETIME: i32 = 3; //seconds
 
 #[tokio::main]
