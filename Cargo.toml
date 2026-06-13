@@ -9,7 +9,7 @@ autotests = false
 inherits = "release"
 
 [dependencies]
-r2r = "0.9.5"
+r2r = { git = "ssh://git@github.com/sequenceplanner/r2r.git", tag = "0.9.6" }
 log = "0.4.22"
 futures = "0.3.31"
 micro_sp = {git = "ssh://git@github.com/endre90/micro_sp.git", branch = "master"}

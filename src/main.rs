@@ -210,7 +210,11 @@ pub async fn visualization_server(
                                 b: metadata.mesh_b,
                                 a: metadata.mesh_a,
                             },
-                            mesh_resource: format!("file://{}/{}", meshes_dir, path.to_string()),
+                            mesh_resource: match metadata.override_meshes_dir {
+                                Some(override_dir) => format!("file://{}/{}", override_dir, path.to_string()),
+                                None => format!("file://{}/{}", meshes_dir, path.to_string()),
+                            },
+                            mesh_use_embedded_materials: true,
                             ..Marker::default()
                         };
                         mesh_markers.push(indiv_marker);
