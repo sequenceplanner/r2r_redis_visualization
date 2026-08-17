@@ -109,7 +109,7 @@ pub async fn visualization_server(
         let mut active_transforms = vec![];
         let mut static_transforms = vec![];
         let frames_local = TransformsManager::get_all_transforms(&mut con).await?;
-        let mut id: i32 = 0;
+        // let mut id: i32 = 0;
         for (_, frame) in frames_local {
             let mut clock = r2r::Clock::create(r2r::ClockType::RosTime).unwrap();
             let now = clock.get_now().unwrap();
@@ -163,14 +163,14 @@ pub async fn visualization_server(
             if metadata.visualize_mesh {
                 match metadata.mesh_file {
                     Some(path) => {
-                        id = id + 1;
+                        // id = 0;
                         let indiv_marker = Marker {
                             header: Header {
                                 stamp: Time { sec: 0, nanosec: 0 },
                                 frame_id: frame.child_frame_id.to_string(),
                             },
-                            ns: "".to_string(),
-                            id,
+                            ns: frame.child_frame_id.to_string(),
+                            id: 0,
                             type_: metadata.mesh_type,
                             action: 0,
                             pose: Pose {
@@ -214,7 +214,7 @@ pub async fn visualization_server(
                                 Some(override_dir) => format!("file://{}/{}", override_dir, path.to_string()),
                                 None => format!("file://{}/{}", meshes_dir, path.to_string()),
                             },
-                            mesh_use_embedded_materials: true,
+                            mesh_use_embedded_materials: metadata.mesh_use_embedded_materials,
                             ..Marker::default()
                         };
                         mesh_markers.push(indiv_marker);
@@ -224,14 +224,14 @@ pub async fn visualization_server(
             }
             if metadata.visualize_zone {
                 if !(metadata.zone == 0.0) {
-                    id = id + 1;
+                    // id = 0;
                     let indiv_marker = Marker {
                         header: Header {
                             stamp: Time { sec: 0, nanosec: 0 },
                             frame_id: frame.child_frame_id.to_string(),
                         },
-                        ns: "".to_string(),
-                        id,
+                        ns: frame.child_frame_id.to_string(),
+                        id: 0,
                         type_: 2,
                         action: 0,
                         pose: Pose {
